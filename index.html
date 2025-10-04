@@ -6,6 +6,7 @@
     <title>知识库管理系统</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <!-- Tailwind 配置 -->
     <script>
@@ -135,7 +136,7 @@
                             </div>
                         </div>
                         <div class="pl-6 mt-1 space-y-1">
-                            <div class="folder-tree-item flex items-center justify-between">
+                            <div class="folder-tree-item flex items-center justify-between document-item" data-id="doc-1">
                                 <div class="flex items-center">
                                     <i class="fa fa-file-text-o text-gray-400 mr-2"></i>
                                     <span class="document-name">项目计划.md</span>
@@ -171,7 +172,7 @@
                                     </div>
                                 </div>
                                 <div class="pl-6 mt-1 space-y-1 hidden">
-                                    <div class="folder-tree-item flex items-center justify-between">
+                                    <div class="folder-tree-item flex items-center justify-between document-item" data-id="doc-2">
                                         <div class="flex items-center">
                                             <i class="fa fa-file-text-o text-gray-400 mr-2"></i>
                                             <span class="document-name">用户需求.md</span>
@@ -213,7 +214,7 @@
                         </div>
                         <!-- 技术文档的子内容 -->
                         <div class="pl-6 mt-1 space-y-1 hidden">
-                            <div class="folder-tree-item flex items-center justify-between">
+                            <div class="folder-tree-item flex items-center justify-between document-item" data-id="doc-3">
                                 <div class="flex items-center">
                                     <i class="fa fa-file-text-o text-gray-400 mr-2"></i>
                                     <span class="document-name">架构设计.md</span>
@@ -230,7 +231,7 @@
                                     </button>
                                 </div>
                             </div>
-                            <div class="folder-tree-item flex items-center justify-between">
+                            <div class="folder-tree-item flex items-center justify-between document-item" data-id="doc-4">
                                 <div class="flex items-center">
                                     <i class="fa fa-file-text-o text-gray-400 mr-2"></i>
                                     <span class="document-name">API文档.md</span>
@@ -326,11 +327,22 @@
                     <span id="currentFileName" class="text-sm text-gray-500 dark:text-gray-400">项目计划.md</span>
                 </div>
                 <div class="flex items-center">
+                    <div class="flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden mr-2">
+                        <button id="editModeBtn" class="editor-toolbar-btn active px-3">
+                            <i class="fa fa-edit mr-1"></i>编辑
+                        </button>
+                        <button id="previewModeBtn" class="editor-toolbar-btn px-3">
+                            <i class="fa fa-eye mr-1"></i>预览
+                        </button>
+                        <button id="splitModeBtn" class="editor-toolbar-btn px-3">
+                            <i class="fa fa-columns mr-1"></i>分屏
+                        </button>
+                    </div>
                     <button id="themeToggle" class="editor-toolbar-btn mr-1">
                         <i class="fa fa-moon-o dark:hidden"></i>
                         <i class="fa fa-sun-o hidden dark:inline-block"></i>
                     </button>
-                    <button class="editor-toolbar-btn">
+                    <button id="saveBtn" class="editor-toolbar-btn">
                         <i class="fa fa-save"></i>
                     </button>
                 </div>
@@ -471,6 +483,12 @@
                         </div>
                     </div>
                 </div>
+                
+                <div id="previewContainer" class="hidden flex-1 overflow-y-auto p-6 bg-white dark:bg-gray-800 m-4 rounded-lg shadow-sm transition-colors duration-300 border-l border-gray-200 dark:border-gray-700">
+                    <div id="previewContent" class="min-h-full">
+                        <!-- 预览内容将在这里显示 -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -478,9 +496,20 @@
     <script>
         // 全局变量
         let folderIdCounter = 4;
-        let documentIdCounter = 1;
+        let documentIdCounter = 5; // 从5开始，因为已有4个默认文档
         let linkIdCounter = 1;
         let attachmentIdCounter = 1;
+        let currentDocumentId = 'doc-1'; // 当前打开的文档ID
+        let currentMode = 'edit'; // 编辑模式: edit, preview, split
+        
+        // 初始化 - 从本地存储加载数据
+        function init() {
+            loadDocumentsFromStorage();
+            setupModeButtons();
+            updatePreview();
+            setupEventListeners();
+            initColorPalettes(); // 初始化颜色选择器
+        }
         
         // 1. 主题切换功能
         const themeToggle = document.getElementById('themeToggle');
@@ -568,6 +597,28 @@
                 
                 bindLinkActionButtons(linkFolder);
             });
+            
+            // 文档点击事件 - 加载文档内容
+document.querySelectorAll('.document-item').forEach(item => {
+    item.addEventListener('click', () => {
+        // 保存当前文档
+        saveCurrentDocument(false); // 添加false参数，不显示保存提示
+        
+        // 切换选中状态
+        document.querySelectorAll('.document-item').forEach(i => {
+            i.classList.remove('active');
+        });
+        item.classList.add('active');
+        
+        // 加载新文档
+        currentDocumentId = item.dataset.id;
+        loadDocument(currentDocumentId);
+        
+        // 更新文件名显示
+        const fileName = item.querySelector('.document-name').textContent;
+        document.getElementById('currentFileName').textContent = fileName;
+    });
+});
         }
         
         // 5. 链接分区功能实现
@@ -637,14 +688,10 @@
             if (renameBtn) {
                 renameBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const linkFolderNameEl = linkFolder.querySelector('.link-folder-name');
-                    if (linkFolderNameEl) {
-                        const oldName = linkFolderNameEl.textContent;
-                        const newName = prompt('请输入新名称:', oldName);
-                        
-                        if (newName && newName !== oldName) {
-                            linkFolderNameEl.textContent = newName;
-                        }
+                    const currentName = linkFolder.querySelector('.link-folder-name').textContent;
+                    const newName = prompt('请输入新名称:', currentName);
+                    if (newName && newName !== currentName) {
+                        linkFolder.querySelector('.link-folder-name').textContent = newName;
                     }
                 });
             }
@@ -654,8 +701,7 @@
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const linkFolderNameEl = linkFolder.querySelector('.link-folder-name');
-                    if (linkFolderNameEl && confirm(`确定要删除 "${linkFolderNameEl.textContent}" 吗？`)) {
+                    if (confirm('确定要删除这个链接文件夹吗？')) {
                         linkFolder.remove();
                     }
                 });
@@ -668,26 +714,28 @@
             if (renameBtn) {
                 renameBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const linkNameEl = linkItem.querySelector('.link-name');
-                    const oldName = linkNameEl.textContent;
-                    const newName = prompt('请输入新名称:', oldName);
-                    
-                    if (newName && newName !== oldName) {
-                        linkNameEl.textContent = newName;
+                    const currentName = linkItem.querySelector('.link-name').textContent;
+                    const newName = prompt('请输入新名称:', currentName);
+                    if (newName && newName !== currentName) {
+                        linkItem.querySelector('.link-name').textContent = newName;
                     }
                 });
             }
             
-            // 插入链接到编辑器
+            // 插入链接到文档
             const insertBtn = linkItem.querySelector('.insert-link');
             if (insertBtn) {
                 insertBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const linkName = linkItem.querySelector('.link-name').textContent;
                     const linkUrl = linkItem.dataset.url;
+                    const linkName = linkItem.querySelector('.link-name').textContent;
                     
-                    // 在编辑器中插入链接
+                    // 插入链接到编辑器
                     document.execCommand('insertHTML', false, `<a href="${linkUrl}" target="_blank">${linkName}</a>`);
+                    
+                    // 自动保存
+                    saveCurrentDocument();
+                    updatePreview();
                 });
             }
             
@@ -696,9 +744,7 @@
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const linkName = linkItem.querySelector('.link-name').textContent;
-                    
-                    if (confirm(`确定要删除链接 "${linkName}" 吗？`)) {
+                    if (confirm('确定要删除这个链接吗？')) {
                         linkItem.remove();
                     }
                 });
@@ -707,207 +753,173 @@
             // 点击链接打开
             linkItem.addEventListener('click', (e) => {
                 if (!e.target.closest('.link-actions')) {
-                    const linkUrl = linkItem.dataset.url;
-                    window.open(linkUrl, '_blank');
+                    const url = linkItem.dataset.url;
+                    if (url) {
+                        window.open(url, '_blank');
+                    }
                 }
             });
         }
         
-        // 6. 字体和字号功能实现
-        document.getElementById('fontFamily').addEventListener('change', function() {
-            document.execCommand('fontName', false, this.value);
-        });
+        // 6. 文档管理功能 - 本地存储实现
+        function getDocuments() {
+            const docs = localStorage.getItem('knowledgeBaseDocuments');
+            return docs ? JSON.parse(docs) : {
+                'doc-1': {
+                    name: '项目计划.md',
+                    content: `
+                        <h1 class="text-2xl font-bold mb-4">项目计划文档</h1>
+                        <p class="mb-4">本文档详细描述了项目的整体计划和时间安排，包括以下几个部分：</p>
+                        
+                        <h2 class="text-xl font-bold mt-6 mb-3">1. 项目背景</h2>
+                        <p class="mb-4">该项目旨在开发一个高效的知识库管理系统，帮助团队更好地管理和共享文档资源。</p>
+                        
+                        <h2 class="text-xl font-bold mt-6 mb-3">2. 项目目标</h2>
+                        <ul class="list-disc pl-6 mb-4">
+                            <li>建立结构化的文档管理系统</li>
+                            <li>支持Markdown格式编辑与预览</li>
+                            <li>实现文档的快速检索功能</li>
+                            <li>支持多人协作编辑</li>
+                        </ul>
+                    `.trim(),
+                    attachments: []
+                },
+                'doc-2': {
+                    name: '用户需求.md',
+                    content: `<h1 class="text-2xl font-bold mb-4">用户需求文档</h1>
+                        <p class="mb-4">本文档描述了系统的用户需求和功能点。</p>`,
+                    attachments: []
+                },
+                'doc-3': {
+                    name: '架构设计.md',
+                    content: `<h1 class="text-2xl font-bold mb-4">架构设计文档</h1>
+                        <p class="mb-4">本文档描述了系统的技术架构和实现方案。</p>`,
+                    attachments: []
+                },
+                'doc-4': {
+                    name: 'API文档.md',
+                    content: `<h1 class="text-2xl font-bold mb-4">API接口文档</h1>
+                        <p class="mb-4">本文档描述了系统提供的API接口和使用方法。</p>`,
+                    attachments: []
+                }
+            };
+        }
         
-        document.getElementById('fontSize').addEventListener('change', function() {
-            // 对选中内容应用字号
-            const selection = window.getSelection();
-            if (selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
-                const span = document.createElement('span');
-                span.style.fontSize = this.value;
-                range.surroundContents(span);
+        function saveDocuments(docs) {
+            localStorage.setItem('knowledgeBaseDocuments', JSON.stringify(docs));
+        }
+        
+        function loadDocumentsFromStorage() {
+            // 首次加载时无需额外操作，因为getDocuments()会处理默认值
+            // 标记当前文档为活跃状态
+            document.querySelector(`.document-item[data-id="${currentDocumentId}"]`).classList.add('active');
+        }
+        
+        function loadDocument(docId) {
+            const docs = getDocuments();
+            const doc = docs[docId];
+            
+            if (doc) {
+                // 加载文档内容
+                document.getElementById('editor').innerHTML = doc.content || '';
+                
+                // 加载附件
+                const attachmentsContainer = document.getElementById('attachmentsContainer');
+                attachmentsContainer.innerHTML = '';
+                
+                if (doc.attachments && doc.attachments.length > 0) {
+                    doc.attachments.forEach(attachment => {
+                        addAttachmentToUI(attachment.id, attachment.name, attachment.size);
+                    });
+                }
+                
+                // 更新预览
+                updatePreview();
+            }
+        }
+        
+        function saveCurrentDocument(showNotification = true) {
+            const docs = getDocuments();
+            const content = document.getElementById('editor').innerHTML;
+            const fileName = document.getElementById('currentFileName').textContent;
+            
+            // 收集附件信息
+            const attachments = [];
+            document.querySelectorAll('.file-attachment').forEach(attach => {
+                attachments.push({
+                    id: attach.dataset.id,
+                    name: attach.querySelector('.file-name').textContent,
+                    size: attach.querySelector('.file-size').textContent
+                });
+            });
+            
+            // 更新或创建文档
+            if (!docs[currentDocumentId]) {
+                docs[currentDocumentId] = { name: fileName, content, attachments };
             } else {
-                // 如果没有选中文本，设置光标处的格式
-                document.execCommand('styleWithCSS', false, true);
-                document.execCommand('fontSize', false, '7'); // 使用execCommand的特殊值
-                document.execCommand('styleWithCSS', false, false);
-                
-                // 修正字体大小
-                const elements = document.querySelectorAll('font[size="7"]');
-                elements.forEach(el => {
-                    el.style.fontSize = this.value;
-                    el.removeAttribute('size');
-                });
+                docs[currentDocumentId].content = content;
+                docs[currentDocumentId].name = fileName;
+                docs[currentDocumentId].attachments = attachments;
             }
-        });
-        
-        // 7. 颜色应用功能
-        const colors = [
-            '#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#FFFFFF',
-            '#FF0000', '#FF9900', '#FFFF00', '#00FF00', '#00FFFF', '#0000FF',
-            '#9900FF', '#FF00FF', '#FF6666', '#FFCC99'
-        ];
-        
-        const foreColorPalette = document.getElementById('foreColorPalette').querySelector('div');
-        const hiliteColorPalette = document.getElementById('hiliteColorPalette').querySelector('div');
-        const editor = document.getElementById('editor');
-        const foreColorBtn = document.getElementById('foreColor');
-        const hiliteColorBtn = document.getElementById('hiliteColor');
-        
-        // 生成颜色选择面板
-        function generateColorPalettes() {
-            foreColorPalette.innerHTML = '';
-            hiliteColorPalette.innerHTML = '';
             
-            colors.forEach(color => {
-                // 文本颜色选项
-                const foreColorBtn = document.createElement('button');
-                foreColorBtn.className = 'color-btn';
-                foreColorBtn.style.backgroundColor = color;
-                foreColorBtn.dataset.color = color;
-                foreColorBtn.addEventListener('click', () => {
-                    applyForeColor(color);
-                });
-                foreColorPalette.appendChild(foreColorBtn);
-                
-                // 背景颜色选项
-                const hiliteColorBtn = document.createElement('button');
-                hiliteColorBtn.className = 'color-btn';
-                hiliteColorBtn.style.backgroundColor = color;
-                hiliteColorBtn.dataset.color = color;
-                hiliteColorBtn.addEventListener('click', () => {
-                    applyHiliteColor(color);
-                });
-                hiliteColorPalette.appendChild(hiliteColorBtn);
-            });
-        }
-        
-        // 应用文本颜色
-        function applyForeColor(color) {
-            document.execCommand('foreColor', false, color);
-            foreColorBtn.querySelector('.color-indicator').style.backgroundColor = color;
-            document.getElementById('foreColorPalette').classList.add('hidden');
-        }
-        
-        // 应用背景颜色
-        function applyHiliteColor(color) {
-            document.execCommand('hiliteColor', false, color);
-            hiliteColorBtn.querySelector('.color-indicator').style.backgroundColor = color;
-            document.getElementById('hiliteColorPalette').classList.add('hidden');
-        }
-        
-        // 颜色选择器交互
-        foreColorBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            document.getElementById('foreColorPalette').classList.toggle('hidden');
-            document.getElementById('hiliteColorPalette').classList.add('hidden');
-        });
-        
-        hiliteColorBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            document.getElementById('hiliteColorPalette').classList.toggle('hidden');
-            document.getElementById('foreColorPalette').classList.add('hidden');
-        });
-        
-        document.addEventListener('click', () => {
-            document.getElementById('foreColorPalette').classList.add('hidden');
-            document.getElementById('hiliteColorPalette').classList.add('hidden');
-        });
-        
-        // 8. 工具栏按钮功能
-        document.querySelectorAll('.editor-toolbar-btn[data-command]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const command = btn.getAttribute('data-command');
-                
-                if (command === 'createLink') {
-                    const url = prompt('请输入链接地址:');
-                    if (url) document.execCommand(command, false, url);
-                } else if (command === 'insertImage') {
-                    const url = prompt('请输入图片地址:');
-                    if (url) document.execCommand(command, false, url);
-                } else {
-                    document.execCommand(command, false, null);
-                }
-                
-                document.querySelectorAll('.editor-toolbar-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-            });
-        });
-        
-        // 9. 附件上传和删除功能
-        const addAttachmentBtn = document.getElementById('addAttachment');
-        const attachmentInput = document.getElementById('attachmentInput');
-        const attachmentsContainer = document.getElementById('attachmentsContainer');
-        
-        addAttachmentBtn.addEventListener('click', () => {
-            attachmentInput.click();
-        });
-        
-        attachmentInput.addEventListener('change', (e) => {
-            const files = e.target.files;
-            if (files.length > 0) {
-                for (let i = 0; i < files.length; i++) {
-                    addAttachment(files[i]);
-                }
-                // 重置input以允许重复选择同一文件
-                attachmentInput.value = '';
+            // 保存到本地存储
+            saveDocuments(docs);
+            
+            // 显示保存提示（可控制是否显示）
+            if (showNotification) {
+                showSaveNotification();
             }
-        });
-        
-        function addAttachment(file) {
-            // 格式化文件大小
-            const fileSize = file.size < 1024 * 1024 
-                ? (file.size / 1024).toFixed(1) + ' KB'
-                : (file.size / (1024 * 1024)).toFixed(1) + ' MB';
-            
-            // 确定文件图标
-            let fileIcon = 'fa-file-o';
-            if (file.type.startsWith('image/')) fileIcon = 'fa-file-image-o';
-            else if (file.type.startsWith('video/')) fileIcon = 'fa-file-video-o';
-            else if (file.type.startsWith('audio/')) fileIcon = 'fa-file-audio-o';
-            else if (file.type.includes('pdf')) fileIcon = 'fa-file-pdf-o';
-            else if (file.type.includes('word')) fileIcon = 'fa-file-word-o';
-            else if (file.type.includes('excel')) fileIcon = 'fa-file-excel-o';
-            else if (file.type.includes('powerpoint')) fileIcon = 'fa-file-powerpoint-o';
-            else if (file.type.includes('zip') || file.type.includes('rar')) fileIcon = 'fa-file-archive-o';
-            
-            const attachmentId = `attachment-${attachmentIdCounter++}`;
-            const attachmentEl = document.createElement('div');
-            attachmentEl.className = 'file-attachment';
-            attachmentEl.id = attachmentId;
-            attachmentEl.innerHTML = `
-                <div class="file-icon">
-                    <i class="fa ${fileIcon} text-xl"></i>
-                </div>
-                <div class="file-info">
-                    <div class="file-name">${file.name}</div>
-                    <div class="file-size">${fileSize}</div>
-                </div>
-                <button class="delete-attachment text-gray-500 dark:text-gray-400 hover:text-red-500 p-2">
-                    <i class="fa fa-times"></i>
-                </button>
-            `;
-            
-            attachmentsContainer.appendChild(attachmentEl);
-            
-            // 添加删除事件
-            attachmentEl.querySelector('.delete-attachment').addEventListener('click', () => {
-                if (confirm(`确定要删除附件 "${file.name}" 吗？`)) {
-                    attachmentEl.remove();
-                }
-            });
         }
         
-        // 10. 文件操作功能
-        // 10.1 添加新文档
+        function showSaveNotification() {
+            // 创建通知元素
+            const notification = document.createElement('div');
+            notification.className = 'fixed bottom-4 right-4 bg-primary text-white px-4 py-2 rounded shadow-lg z-50 transition-all duration-300 transform translate-y-20 opacity-0';
+            notification.textContent = '文档已保存';
+            document.body.appendChild(notification);
+            
+            // 显示通知
+            setTimeout(() => {
+                notification.classList.remove('translate-y-20', 'opacity-0');
+            }, 10);
+            
+            // 3秒后隐藏通知
+            setTimeout(() => {
+                notification.classList.add('translate-y-20', 'opacity-0');
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 3000);
+        }
+        
+        // 7. 添加新文档功能
         document.getElementById('addDocument').addEventListener('click', () => {
-            const docName = prompt('请输入新文档名称:', `新文档${documentIdCounter}.md`);
+            const docName = prompt('请输入文档名称:', `新文档${documentIdCounter}.md`);
             if (docName) {
+                // 保存当前文档
+                saveCurrentDocument();
+                
+                // 创建新文档ID
+                const newDocId = `doc-${documentIdCounter}`;
                 documentIdCounter++;
                 
-                const docItem = document.createElement('div');
-                docItem.className = 'folder-tree-item flex items-center justify-between';
-                docItem.innerHTML = `
+                // 添加到文档列表
+                const folderTree = document.getElementById('folderTree');
+                const firstFolder = folderTree.querySelector('.folder-item');
+                const subItems = firstFolder.querySelector('div.pl-6');
+                
+                // 如果没有子项目容器，创建一个
+                if (!subItems) {
+                    const subContainer = document.createElement('div');
+                    subContainer.className = 'pl-6 mt-1 space-y-1';
+                    firstFolder.appendChild(subContainer);
+                }
+                
+                // 创建新文档元素
+                const newDocElement = document.createElement('div');
+                newDocElement.className = 'folder-tree-item flex items-center justify-between document-item active';
+                newDocElement.dataset.id = newDocId;
+                newDocElement.innerHTML = `
                     <div class="flex items-center">
                         <i class="fa fa-file-text-o text-gray-400 mr-2"></i>
                         <span class="document-name">${docName}</span>
@@ -925,241 +937,461 @@
                     </div>
                 `;
                 
-                const firstFolder = document.querySelector('.folder-item div.pl-6');
-                if (firstFolder) {
-                    firstFolder.appendChild(docItem);
-                    bindDocumentActionButtons(docItem);
-                    
-                    firstFolder.classList.remove('hidden');
-                    const folderIcon = firstFolder.closest('.folder-item').querySelector('.fa-folder');
-                    if (folderIcon) {
-                        folderIcon.classList.replace('fa-folder', 'fa-folder-open');
+                // 添加到DOM
+                firstFolder.querySelector('div.pl-6').appendChild(newDocElement);
+                
+                // 清除其他文档的活跃状态
+                document.querySelectorAll('.document-item').forEach(item => {
+                    if (item.dataset.id !== newDocId) {
+                        item.classList.remove('active');
                     }
+                });
+                
+                // 添加到本地存储
+                const docs = getDocuments();
+                docs[newDocId] = {
+                    name: docName,
+                    content: '',
+                    attachments: []
+                };
+                saveDocuments(docs);
+                
+                // 切换到新文档
+                currentDocumentId = newDocId;
+                document.getElementById('currentFileName').textContent = docName;
+                document.getElementById('editor').innerHTML = '';
+                document.getElementById('attachmentsContainer').innerHTML = '';
+                updatePreview();
+                
+                // 绑定事件
+                setupFolderToggle();
+            }
+        });
+        
+        // 8. 保存按钮功能
+        document.getElementById('saveBtn').addEventListener('click', saveCurrentDocument);
+        
+        // 9. 预览功能
+        function updatePreview() {
+            const content = document.getElementById('editor').innerHTML;
+            // 转换为Markdown预览
+            document.getElementById('previewContent').innerHTML = content;
+        }
+        
+        // 10. 模式切换功能
+        function setupModeButtons() {
+            const editModeBtn = document.getElementById('editModeBtn');
+            const previewModeBtn = document.getElementById('previewModeBtn');
+            const splitModeBtn = document.getElementById('splitModeBtn');
+            const editorContainer = document.getElementById('editorContainer');
+            const previewContainer = document.getElementById('previewContainer');
+            
+            // 编辑模式
+            editModeBtn.addEventListener('click', () => {
+                currentMode = 'edit';
+                editModeBtn.classList.add('active');
+                previewModeBtn.classList.remove('active');
+                splitModeBtn.classList.remove('active');
+                
+                editorContainer.classList.remove('hidden');
+                editorContainer.classList.add('flex-1');
+                previewContainer.classList.add('hidden');
+                previewContainer.classList.remove('flex-1');
+            });
+            
+            // 预览模式
+            previewModeBtn.addEventListener('click', () => {
+                saveCurrentDocument(false); // 切换前保存但不显示提示
+                currentMode = 'preview';
+                previewModeBtn.classList.add('active');
+                editModeBtn.classList.remove('active');
+                splitModeBtn.classList.remove('active');
+                
+                previewContainer.classList.remove('hidden');
+                previewContainer.classList.add('flex-1');
+                editorContainer.classList.add('hidden');
+                editorContainer.classList.remove('flex-1');
+                updatePreview();
+            });
+            
+            // 分屏模式
+            splitModeBtn.addEventListener('click', () => {
+                saveCurrentDocument(false); // 切换前保存但不显示提示
+                currentMode = 'split';
+                splitModeBtn.classList.add('active');
+                editModeBtn.classList.remove('active');
+                previewModeBtn.classList.remove('active');
+                
+                editorContainer.classList.remove('hidden');
+                editorContainer.classList.add('flex-1');
+                previewContainer.classList.remove('hidden');
+                previewContainer.classList.add('flex-1');
+                updatePreview();
+            });
+            
+            // 编辑器内容变化时更新预览
+            document.getElementById('editor').addEventListener('input', () => {
+                if (currentMode === 'preview' || currentMode === 'split') {
+                    updatePreview();
                 }
+            });
+        }
+        
+        // 11. 附件上传功能
+        document.getElementById('addAttachment').addEventListener('click', () => {
+            document.getElementById('attachmentInput').click();
+        });
+        
+        document.getElementById('attachmentInput').addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const fileId = `attachment-${attachmentIdCounter++}`;
+                    addAttachmentToUI(fileId, file.name, formatFileSize(file.size));
+                }
+                
+                // 保存附件信息
+                saveCurrentDocument();
+                
+                // 重置input，允许重复选择同一文件
+                this.value = '';
             }
         });
         
-        // 10.2 添加根文件夹
-        document.getElementById('addRootFolder').addEventListener('click', () => {
-            const folderName = prompt('请输入文件夹名称:', `新文件夹${folderIdCounter}`);
-            if (folderName) {
-                addNewFolder(folderName, document.getElementById('folderTree'));
+        function addAttachmentToUI(id, name, size) {
+            const attachmentsContainer = document.getElementById('attachmentsContainer');
+            const attachment = document.createElement('div');
+            attachment.className = 'file-attachment';
+            attachment.dataset.id = id;
+            
+            // 确定文件图标
+            const fileExtension = name.split('.').pop().toLowerCase();
+            let fileIcon = 'fa-file-o';
+            
+            if (['jpg', 'jpeg', 'png', 'gif'].includes(fileExtension)) {
+                fileIcon = 'fa-file-image-o';
+            } else if (['pdf'].includes(fileExtension)) {
+                fileIcon = 'fa-file-pdf-o';
+            } else if (['doc', 'docx'].includes(fileExtension)) {
+                fileIcon = 'fa-file-word-o';
+            } else if (['xls', 'xlsx'].includes(fileExtension)) {
+                fileIcon = 'fa-file-excel-o';
+            } else if (['zip', 'rar', '7z'].includes(fileExtension)) {
+                fileIcon = 'fa-file-zip-o';
+            } else if (['mp3', 'wav', 'flac'].includes(fileExtension)) {
+                fileIcon = 'fa-file-audio-o';
+            } else if (['mp4', 'avi', 'mov'].includes(fileExtension)) {
+                fileIcon = 'fa-file-video-o';
             }
-        });
+            
+            attachment.innerHTML = `
+                <i class="fa ${fileIcon} file-icon"></i>
+                <div class="file-info">
+                    <div class="file-name">${name}</div>
+                    <div class="file-size">${size}</div>
+                </div>
+                <button class="delete-attachment text-gray-500 dark:text-gray-400 hover:text-red-500 p-2">
+                    <i class="fa fa-times"></i>
+                </button>
+            `;
+            
+            attachmentsContainer.appendChild(attachment);
+            
+            // 添加删除附件事件
+            attachment.querySelector('.delete-attachment').addEventListener('click', () => {
+                attachment.remove();
+                saveCurrentDocument();
+            });
+        }
         
-        // 10.3 文件夹操作
-        function bindFolderActionButtons(folderItem) {
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // 12. 绑定文件夹操作按钮
+        function bindFolderActionButtons(folder) {
             // 添加子文件夹
-            const addChildBtn = folderItem.querySelector('.add-child-folder');
+            const addChildBtn = folder.querySelector('.add-child-folder');
             if (addChildBtn) {
                 addChildBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const folderName = prompt('请输入子文件夹名称:');
+                    const folderName = prompt('请输入文件夹名称:');
                     if (folderName) {
-                        const subFolderContainer = folderItem.querySelector('div.pl-6');
-                        addNewFolder(folderName, subFolderContainer);
+                        const subFolderContainer = folder.querySelector('div.pl-6');
+                        let subContainer;
                         
-                        subFolderContainer.classList.remove('hidden');
-                        const folderIcon = folderItem.querySelector('.fa-folder');
+                        // 如果没有子容器，创建一个
+                        if (!subFolderContainer) {
+                            subContainer = document.createElement('div');
+                            subContainer.className = 'pl-6 mt-1 space-y-1';
+                            folder.appendChild(subContainer);
+                        } else {
+                            subContainer = subFolderContainer;
+                            subContainer.classList.remove('hidden');
+                        }
+                        
+                        // 创建新文件夹
+                        const newFolder = document.createElement('div');
+                        newFolder.className = 'folder-item';
+                        newFolder.id = `folder-${folderIdCounter++}`;
+                        newFolder.innerHTML = `
+                            <div class="folder-tree-item flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fa fa-folder text-yellow-500 mr-2"></i>
+                                    <span class="folder-name">${folderName}</span>
+                                </div>
+                                <div class="folder-actions opacity-0 hover:opacity-100 transition-opacity">
+                                    <button class="add-child-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                        <i class="fa fa-plus-circle"></i>
+                                    </button>
+                                    <button class="rename-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                        <i class="fa fa-pencil"></i>
+                                    </button>
+                                    <button class="delete-folder p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="pl-6 mt-1 space-y-1 hidden">
+                                <!-- 子内容将在这里添加 -->
+                            </div>
+                        `;
+                        
+                        subContainer.appendChild(newFolder);
+                        
+                        // 更新文件夹图标为打开状态
+                        const folderIcon = folder.querySelector('.fa-folder');
                         if (folderIcon) {
                             folderIcon.classList.replace('fa-folder', 'fa-folder-open');
                         }
+                        
+                        // 绑定事件
+                        setupFolderToggle();
                     }
                 });
             }
             
             // 重命名文件夹
-            const renameBtn = folderItem.querySelector('.rename-folder');
+            const renameBtn = folder.querySelector('.rename-folder');
             if (renameBtn) {
                 renameBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const folderNameEl = folderItem.querySelector('.folder-name');
-                    const oldName = folderNameEl.textContent;
-                    const newName = prompt('请输入新文件夹名:', oldName);
-                    
-                    if (newName && newName !== oldName) {
-                        folderNameEl.textContent = newName;
+                    const currentName = folder.querySelector('.folder-name').textContent;
+                    const newName = prompt('请输入新名称:', currentName);
+                    if (newName && newName !== currentName) {
+                        folder.querySelector('.folder-name').textContent = newName;
                     }
                 });
             }
             
             // 删除文件夹
-            const deleteBtn = folderItem.querySelector('.delete-folder');
+            const deleteBtn = folder.querySelector('.delete-folder');
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const folderName = folderItem.querySelector('.folder-name').textContent;
-                    
-                    if (confirm(`确定要删除文件夹 "${folderName}" 及其所有内容吗？`)) {
-                        folderItem.remove();
+                    if (confirm('确定要删除这个文件夹吗？文件夹内的所有内容也将被删除。')) {
+                        folder.remove();
                     }
                 });
             }
         }
         
-        // 10.4 文档操作
-        function bindDocumentActionButtons(docItem) {
-            // 重命名文档
-            const renameBtn = docItem.querySelector('.rename-document');
-            if (renameBtn) {
-                renameBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const docNameEl = docItem.querySelector('.document-name');
-                    const oldName = docNameEl.textContent;
-                    const newName = prompt('请输入新文件名:', oldName);
-                    
-                    if (newName && newName !== oldName) {
-                        docNameEl.textContent = newName;
-                        if (document.getElementById('currentFileName').textContent === oldName) {
-                            document.getElementById('currentFileName').textContent = newName;
-                        }
-                    }
-                });
+        // 添加根文件夹
+        document.getElementById('addRootFolder').addEventListener('click', () => {
+            const folderName = prompt('请输入文件夹名称:');
+            if (folderName) {
+                const folderTree = document.getElementById('folderTree');
+                
+                // 创建新文件夹
+                const newFolder = document.createElement('div');
+                newFolder.className = 'folder-item';
+                newFolder.id = `folder-${folderIdCounter++}`;
+                newFolder.innerHTML = `
+                    <div class="folder-tree-item flex items-center justify-between">
+                        <div class="flex items-center">
+                            <i class="fa fa-folder text-yellow-500 mr-2"></i>
+                            <span class="folder-name">${folderName}</span>
+                        </div>
+                        <div class="folder-actions opacity-0 hover:opacity-100 transition-opacity">
+                            <button class="add-child-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                <i class="fa fa-plus-circle"></i>
+                            </button>
+                            <button class="rename-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                            <button class="delete-folder p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="pl-6 mt-1 space-y-1 hidden">
+                        <!-- 子内容将在这里添加 -->
+                    </div>
+                `;
+                
+                folderTree.appendChild(newFolder);
+                
+                // 绑定事件
+                setupFolderToggle();
             }
+        });
+        
+        // 13. 初始化颜色选择器
+        function initColorPalettes() {
+            // 定义常用颜色
+            const colors = [
+                '#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#EEEEEE', '#FFFFFF',
+                '#FF0000', '#FF9900', '#FFFF00', '#00FF00', '#00FFFF', '#0000FF', '#9900FF', '#FF00FF',
+                '#FF6666', '#FFCC99', '#FFFF99', '#CCFF99', '#CCFFFF', '#99CCFF', '#CC99FF', '#FF99CC'
+            ];
             
-            // 删除文档
-            const deleteBtn = docItem.querySelector('.delete-document');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const docName = docItem.querySelector('.document-name').textContent;
+            // 创建文本颜色选择器
+            const foreColorPalette = document.querySelector('#foreColorPalette .grid');
+            colors.forEach(color => {
+                const colorBtn = document.createElement('button');
+                colorBtn.className = 'color-btn';
+                colorBtn.style.backgroundColor = color;
+                colorBtn.title = color;
+                
+                // 为深色背景添加边框，使白色可见
+                if (color === '#FFFFFF') {
+                    colorBtn.classList.add('border', 'border-gray-300');
+                }
+                
+                colorBtn.addEventListener('click', () => {
+                    document.execCommand('foreColor', false, color);
+                    document.getElementById('editor').focus();
                     
-                    if (confirm(`确定要删除 "${docName}" 吗？`)) {
-                        docItem.remove();
-                        if (document.getElementById('currentFileName').textContent === docName) {
-                            editor.innerHTML = '';
-                            document.getElementById('currentFileName').textContent = '';
-                            attachmentsContainer.innerHTML = ''; // 清空附件
-                        }
-                    }
+                    // 更新颜色指示器
+                    document.querySelector('#foreColor .color-indicator').style.backgroundColor = color;
+                    
+                    // 关闭颜色面板
+                    foreColorPalette.parentElement.classList.add('hidden');
+                    
+                    // 自动保存
+                    saveCurrentDocument();
+                    updatePreview();
                 });
-            }
+                
+                foreColorPalette.appendChild(colorBtn);
+            });
             
-            // 移动文档
-            const moveBtn = docItem.querySelector('.move-document');
-            if (moveBtn) {
-                moveBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const docName = docItem.querySelector('.document-name').textContent;
+            // 创建背景颜色选择器
+            const hiliteColorPalette = document.querySelector('#hiliteColorPalette .grid');
+            // 额外添加一个透明色作为清除背景色的选项
+            [...colors, 'transparent'].forEach(color => {
+                const colorBtn = document.createElement('button');
+                colorBtn.className = 'color-btn';
+                colorBtn.style.backgroundColor = color;
+                colorBtn.title = color;
+                
+                // 为透明色添加特殊样式
+                if (color === 'transparent') {
+                    colorBtn.innerHTML = '<i class="fa fa-ban text-gray-500"></i>';
+                } else if (color === '#FFFFFF') {
+                    colorBtn.classList.add('border', 'border-gray-300');
+                }
+                
+                colorBtn.addEventListener('click', () => {
+                    document.execCommand('hiliteColor', false, color);
+                    document.getElementById('editor').focus();
                     
-                    const folders = Array.from(document.querySelectorAll('.folder-item'))
-                        .map(folder => {
-                            const name = folder.querySelector('.folder-name').textContent;
-                            return { element: folder, id: folder.id, name };
-                        });
-                    
-                    if (folders.length > 0) {
-                        const folderNames = folders.map(f => f.name);
-                        const selectedFolder = prompt(`请选择目标文件夹:\n${folderNames.join('\n')}`);
-                        
-                        if (selectedFolder) {
-                            const targetFolder = folders.find(f => f.name === selectedFolder);
-                            if (targetFolder) {
-                                const target = targetFolder.element.querySelector('div.pl-6');
-                                if (target) {
-                                    const clonedDocItem = docItem.cloneNode(true);
-                                    bindDocumentActionButtons(clonedDocItem);
-                                    target.appendChild(clonedDocItem);
-                                    docItem.remove();
-                                    alert(`已将 "${docName}" 移动到 "${selectedFolder}"`);
-                                    
-                                    target.classList.remove('hidden');
-                                    const folderIcon = targetFolder.element.querySelector('.fa-folder');
-                                    if (folderIcon) {
-                                        folderIcon.classList.replace('fa-folder', 'fa-folder-open');
-                                    }
-                                }
-                            } else {
-                                alert('未找到指定的文件夹');
-                            }
-                        }
-                    }
-                });
-            }
-            
-            // 点击文档打开
-            docItem.addEventListener('click', (e) => {
-                if (!e.target.closest('.document-actions')) {
-                    const docName = docItem.querySelector('.document-name').textContent;
-                    document.getElementById('currentFileName').textContent = docName;
-                    
-                    if (docName === '项目计划.md') {
-                        editor.innerHTML = `
-                            <h1 class="text-2xl font-bold mb-4">项目计划文档</h1>
-                            <p class="mb-4">本文档详细描述了项目的整体计划和时间安排。</p>
-                            <h2 class="text-xl font-bold mt-6 mb-3">1. 项目背景</h2>
-                            <p class="mb-4">开发高效的知识库管理系统，帮助团队管理和共享文档资源。</p>
-                        `;
+                    // 更新颜色指示器
+                    const indicator = document.querySelector('#hiliteColor .color-indicator');
+                    if (color === 'transparent') {
+                        indicator.style.backgroundColor = 'transparent';
+                        indicator.style.border = '1px solid #999';
                     } else {
-                        editor.innerHTML = `<p>请编辑 ${docName} 的内容...</p>`;
+                        indicator.style.backgroundColor = color;
+                        indicator.style.border = 'none';
                     }
                     
-                    // 清空当前附件
-                    attachmentsContainer.innerHTML = '';
+                    // 关闭颜色面板
+                    hiliteColorPalette.parentElement.classList.add('hidden');
                     
-                    document.querySelectorAll('.folder-tree-item').forEach(item => {
-                        item.classList.remove('active');
-                    });
-                    docItem.classList.add('active');
-                }
+                    // 自动保存
+                    saveCurrentDocument();
+                    updatePreview();
+                });
+                
+                hiliteColorPalette.appendChild(colorBtn);
+            });
+            
+            // 文本颜色按钮点击事件 - 显示/隐藏颜色面板
+            const foreColorBtn = document.getElementById('foreColor');
+            foreColorBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.getElementById('foreColorPalette').classList.toggle('hidden');
+                document.getElementById('hiliteColorPalette').classList.add('hidden');
+            });
+            
+            // 背景颜色按钮点击事件 - 显示/隐藏颜色面板
+            const hiliteColorBtn = document.getElementById('hiliteColor');
+            hiliteColorBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.getElementById('hiliteColorPalette').classList.toggle('hidden');
+                document.getElementById('foreColorPalette').classList.add('hidden');
+            });
+            
+            // 点击页面其他地方关闭颜色面板
+            document.addEventListener('click', () => {
+                document.getElementById('foreColorPalette').classList.add('hidden');
+                document.getElementById('hiliteColorPalette').classList.add('hidden');
+            });
+            
+            // 阻止颜色面板内部点击事件冒泡
+            document.getElementById('foreColorPalette').addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            
+            document.getElementById('hiliteColorPalette').addEventListener('click', (e) => {
+                e.stopPropagation();
             });
         }
         
-        // 创建新文件夹
-        function addNewFolder(folderName, parentContainer) {
-            const folderItem = document.createElement('div');
-            folderItem.className = 'folder-item';
-            folderItem.id = `folder-${folderIdCounter}`;
-            folderIdCounter++;
+        // 设置其他事件监听器
+        function setupEventListeners() {
+            // 编辑器工具栏按钮事件
+            document.querySelectorAll('.editor-toolbar-btn[data-command]').forEach(button => {
+                button.addEventListener('click', () => {
+                    const command = button.getAttribute('data-command');
+                    let value = null;
+                    
+                    if (command === 'createLink') {
+                        value = prompt('请输入链接地址:');
+                        if (!value) return; // 如果用户取消，则不执行命令
+                    } else if (command === 'insertImage') {
+                        value = prompt('请输入图片URL:');
+                        if (!value) return; // 如果用户取消，则不执行命令
+                    }
+                    
+                    document.execCommand(command, false, value);
+                    document.getElementById('editor').focus();
+                    
+                    // 自动保存
+                    saveCurrentDocument();
+                    updatePreview();
+                });
+            });
             
-            folderItem.innerHTML = `
-                <div class="folder-tree-item flex items-center justify-between">
-                    <div class="flex items-center">
-                        <i class="fa fa-folder text-yellow-500 mr-2"></i>
-                        <span class="folder-name">${folderName}</span>
-                    </div>
-                    <div class="folder-actions opacity-0 hover:opacity-100 transition-opacity">
-                        <button class="add-child-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
-                            <i class="fa fa-plus-circle"></i>
-                        </button>
-                        <button class="rename-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
-                            <i class="fa fa-pencil"></i>
-                        </button>
-                        <button class="delete-folder p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
-                            <i class="fa fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="pl-6 mt-1 space-y-1 hidden">
-                    <!-- 子文件将在这里显示 -->
-                </div>
-            `;
+            // 自动保存 - 当编辑器失去焦点时
+            document.getElementById('editor').addEventListener('blur', saveCurrentDocument);
             
-            parentContainer.appendChild(folderItem);
+            // 窗口关闭前保存
+            window.addEventListener('beforeunload', saveCurrentDocument);
+        }
+        
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', () => {
             setupFolderToggle();
-        }
-        
-        // 初始化
-        function init() {
-            generateColorPalettes();
-            setupFolderToggle();
-            
-            // 绑定所有文档操作按钮
-            document.querySelectorAll('.folder-tree-item').forEach(item => {
-                if (item.querySelector('.document-name')) {
-                    bindDocumentActionButtons(item);
-                }
-            });
-            
-            // 绑定所有链接项操作按钮
-            document.querySelectorAll('.link-item .folder-tree-item').forEach(item => {
-                if (item.querySelector('.link-name') && !item.querySelector('.link-folder-name')) {
-                    bindLinkItemActionButtons(item);
-                }
-            });
-        }
-        
-        document.addEventListener('DOMContentLoaded', init);
+            init();
+        });
     </script>
 </body>
 </html>
