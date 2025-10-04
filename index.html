@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知识库管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <!-- Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#6B7280',
+                        neutral: '#F3F4F6',
+                        dark: '#1F2937',
+                        light: '#F9FAFB',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                        weiyaruhei: ['"Microsoft YaHei"', 'sans-serif'],
+                        song: ['"SimSun"', 'serif'],
+                        kai: ['"KaiTi"', 'serif'],
+                        hei: ['"SimHei"', 'sans-serif'],
+                        fang: ['"FangSong"', 'serif'],
+                        times: ['"Times New Roman"', 'serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .folder-tree-item {
+                @apply py-1 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer transition-colors duration-150;
+            }
+            .folder-tree-item.active {
+                @apply bg-primary/10 text-primary font-medium;
+            }
+            .editor-toolbar-btn {
+                @apply p-2 rounded transition-all duration-150 flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700;
+            }
+            .editor-toolbar-btn.active {
+                @apply ring-2 ring-primary/50 bg-primary/10 text-primary;
+            }
+            .color-btn {
+                @apply w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110 border border-gray-200 dark:border-gray-600 cursor-pointer;
+            }
+            .color-indicator {
+                @apply w-4 h-4 rounded-full inline-block mr-1;
+            }
+            .file-attachment {
+                @apply flex items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg my-2 border border-gray-200 dark:border-gray-600;
+            }
+            .file-icon {
+                @apply text-gray-500 dark:text-gray-400 mr-3;
+            }
+            .file-info {
+                @apply flex-1;
+            }
+            .file-name {
+                @apply font-medium;
+            }
+            .file-size {
+                @apply text-sm text-gray-500 dark:text-gray-400;
+            }
+            .resizer {
+                @apply w-1 bg-gray-300 dark:bg-gray-600 cursor-col-resize hover:bg-primary transition-colors duration-200 relative z-10;
+            }
+            .resizer::before {
+                content: '';
+                @apply absolute top-0 left-1/2 -translate-x-1/2 h-full w-3 cursor-col-resize;
+            }
+        }
+    </style>
+</head>
+<body class="font-inter bg-gray-50 text-gray-800 dark:bg-gray-900 dark:text-gray-200 h-screen flex overflow-hidden transition-colors duration-300">
+    <!-- 主容器 -->
+    <div class="flex flex-col md:flex-row w-full h-full overflow-hidden">
+        <!-- 左侧导航区 -->
+        <div id="leftPanel" class="w-full md:w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full overflow-hidden transition-colors duration-300">
+            <!-- 左侧标签切换 -->
+            <div class="flex border-b border-gray-200 dark:border-gray-700">
+                <button id="folderTab" class="flex-1 py-3 px-4 text-center font-medium text-primary border-b-2 border-primary">
+                    <i class="fa fa-folder mr-2"></i>文件夹
+                </button>
+                <button id="linkTab" class="flex-1 py-3 px-4 text-center font-medium text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">
+                    <i class="fa fa-link mr-2"></i>链接
+                </button>
+            </div>
+            
+            <!-- 文件夹内容区 -->
+            <div id="folderContent" class="flex-1 overflow-y-auto scrollbar-hide p-3">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-medium text-gray-700 dark:text-gray-300">文件夹列表</h3>
+                    <button id="addRootFolder" class="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors">
+                        <i class="fa fa-plus"></i>
+                    </button>
+                </div>
+                
+                <!-- 文件夹树结构 -->
+                <div id="folderTree" class="space-y-1 text-sm">
+                    <!-- 初始文件夹示例 -->
+                    <div class="folder-item" id="folder-1">
+                        <div class="folder-tree-item flex items-center justify-between">
+                            <div class="flex items-center">
+                                <i class="fa fa-folder-open text-yellow-500 mr-2"></i>
+                                <span class="folder-name">项目文档</span>
+                            </div>
+                            <div class="folder-actions opacity-0 hover:opacity-100 transition-opacity">
+                                <button class="add-child-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                    <i class="fa fa-plus-circle"></i>
+                                </button>
+                                <button class="rename-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                    <i class="fa fa-pencil"></i>
+                                </button>
+                                <button class="delete-folder p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="pl-6 mt-1 space-y-1">
+                            <div class="folder-tree-item flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fa fa-file-text-o text-gray-400 mr-2"></i>
+                                    <span class="document-name">项目计划.md</span>
+                                </div>
+                                <div class="document-actions opacity-0 hover:opacity-100 transition-opacity">
+                                    <button class="rename-document p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                        <i class="fa fa-pencil"></i>
+                                    </button>
+                                    <button class="move-document p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                        <i class="fa fa-arrows"></i>
+                                    </button>
+                                    <button class="delete-document p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="folder-item" id="folder-2">
+                                <div class="folder-tree-item flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <i class="fa fa-folder text-yellow-500 mr-2"></i>
+                                        <span class="folder-name">需求分析</span>
+                                    </div>
+                                    <div class="folder-actions opacity-0 hover:opacity-100 transition-opacity">
+                                        <button class="add-child-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                            <i class="fa fa-plus-circle"></i>
+                                        </button>
+                                        <button class="rename-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                            <i class="fa fa-pencil"></i>
+                                        </button>
+                                        <button class="delete-folder p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                            <i class="fa fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="pl-6 mt-1 space-y-1 hidden">
+                                    <div class="folder-tree-item flex items-center justify-between">
+                                        <div class="flex items-center">
+                                            <i class="fa fa-file-text-o text-gray-400 mr-2"></i>
+                                            <span class="document-name">用户需求.md</span>
+                                        </div>
+                                        <div class="document-actions opacity-0 hover:opacity-100 transition-opacity">
+                                            <button class="rename-document p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                                <i class="fa fa-pencil"></i>
+                                            </button>
+                                            <button class="move-document p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                                <i class="fa fa-arrows"></i>
+                                            </button>
+                                            <button class="delete-document p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                                <i class="fa fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="folder-item" id="folder-3">
+                        <div class="folder-tree-item flex items-center justify-between">
+                            <div class="flex items-center">
+                                <i class="fa fa-folder text-yellow-500 mr-2"></i>
+                                <span class="folder-name">技术文档</span>
+                            </div>
+                            <div class="folder-actions opacity-0 hover:opacity-100 transition-opacity">
+                                <button class="add-child-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                    <i class="fa fa-plus-circle"></i>
+                                </button>
+                                <button class="rename-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                    <i class="fa fa-pencil"></i>
+                                </button>
+                                <button class="delete-folder p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- 技术文档的子内容 -->
+                        <div class="pl-6 mt-1 space-y-1 hidden">
+                            <div class="folder-tree-item flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fa fa-file-text-o text-gray-400 mr-2"></i>
+                                    <span class="document-name">架构设计.md</span>
+                                </div>
+                                <div class="document-actions opacity-0 hover:opacity-100 transition-opacity">
+                                    <button class="rename-document p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                        <i class="fa fa-pencil"></i>
+                                    </button>
+                                    <button class="move-document p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                        <i class="fa fa-arrows"></i>
+                                    </button>
+                                    <button class="delete-document p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="folder-tree-item flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fa fa-file-text-o text-gray-400 mr-2"></i>
+                                    <span class="document-name">API文档.md</span>
+                                </div>
+                                <div class="document-actions opacity-0 hover:opacity-100 transition-opacity">
+                                    <button class="rename-document p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                        <i class="fa fa-pencil"></i>
+                                    </button>
+                                    <button class="move-document p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                        <i class="fa fa-arrows"></i>
+                                    </button>
+                                    <button class="delete-document p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 添加文档按钮 -->
+                <div class="mt-4">
+                    <button id="addDocument" class="w-full py-2 px-3 border border-dashed border-gray-300 dark:border-gray-600 rounded text-gray-500 dark:text-gray-400 hover:border-primary hover:text-primary transition-colors flex items-center justify-center">
+                        <i class="fa fa-file-text-o mr-2"></i>添加新文档
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 链接内容区 (默认隐藏) -->
+            <div id="linkContent" class="hidden flex-1 overflow-y-auto scrollbar-hide p-3">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-medium text-gray-700 dark:text-gray-300">链接列表</h3>
+                    <button id="addLink" class="p-1.5 text-gray-500 dark:text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors">
+                        <i class="fa fa-plus"></i>
+                    </button>
+                </div>
+                
+                <div id="linkTree" class="space-y-1 text-sm">
+                    <!-- 链接可以有层级结构 -->
+                    <div class="link-item" id="link-folder-1">
+                        <div class="folder-tree-item flex items-center justify-between">
+                            <div class="flex items-center">
+                                <i class="fa fa-folder text-yellow-500 mr-2"></i>
+                                <span class="link-folder-name">外部资源</span>
+                            </div>
+                            <div class="link-actions opacity-0 hover:opacity-100 transition-opacity">
+                                <button class="add-child-link p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                    <i class="fa fa-plus-circle"></i>
+                                </button>
+                                <button class="rename-link p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                    <i class="fa fa-pencil"></i>
+                                </button>
+                                <button class="delete-link p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="pl-6 mt-1 space-y-1 hidden">
+                            <div class="folder-tree-item flex items-center justify-between cursor-pointer">
+                                <div class="flex items-center">
+                                    <i class="fa fa-external-link text-blue-500 mr-2"></i>
+                                    <span class="link-name">官方文档</span>
+                                </div>
+                                <div class="link-actions opacity-0 hover:opacity-100 transition-opacity">
+                                    <button class="rename-link p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                        <i class="fa fa-pencil"></i>
+                                    </button>
+                                    <button class="insert-link p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                                        <i class="fa fa-clipboard"></i>
+                                    </button>
+                                    <button class="delete-link p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 可拖拽分隔线 -->
+        <div id="resizer" class="resizer md:block hidden"></div>
+        
+        <!-- 右侧编辑/预览区 -->
+        <div id="rightPanel" class="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 h-full overflow-hidden transition-colors duration-300">
+            <!-- 顶部控制栏 -->
+            <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-2 flex justify-between items-center">
+                <div class="flex items-center">
+                    <button id="toggleEditorToolbar" class="editor-toolbar-btn mr-1">
+                        <i class="fa fa-wrench"></i>
+                    </button>
+                    <span id="currentFileName" class="text-sm text-gray-500 dark:text-gray-400">项目计划.md</span>
+                </div>
+                <div class="flex items-center">
+                    <button id="themeToggle" class="editor-toolbar-btn mr-1">
+                        <i class="fa fa-moon-o dark:hidden"></i>
+                        <i class="fa fa-sun-o hidden dark:inline-block"></i>
+                    </button>
+                    <button class="editor-toolbar-btn">
+                        <i class="fa fa-save"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 编辑器工具栏 -->
+            <div id="editorToolbar" class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-2 transition-all duration-300">
+                <div class="flex flex-wrap gap-1">
+                    <!-- 字体选择 -->
+                    <select id="fontFamily" class="editor-toolbar-btn border border-gray-200 dark:border-gray-600 rounded px-2 h-9 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                        <option value="Inter, sans-serif">Inter</option>
+                        <option value="Arial, sans-serif">Arial</option>
+                        <option value="Microsoft YaHei, sans-serif">微软雅黑</option>
+                        <option value="SimSun, serif">宋体</option>
+                    </select>
+                    
+                    <!-- 字号选择 -->
+                    <select id="fontSize" class="editor-toolbar-btn border border-gray-200 dark:border-gray-600 rounded px-2 h-9 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                        <option value="12px">极小</option>
+                        <option value="14px">小</option>
+                        <option value="16px" selected>中</option>
+                        <option value="18px">大</option>
+                        <option value="24px">较大</option>
+                    </select>
+                    
+                    <div class="h-8 border-r border-gray-300 dark:border-gray-600 mx-1"></div>
+                    
+                    <!-- 文本格式 -->
+                    <button class="editor-toolbar-btn" title="粗体" data-command="bold">
+                        <i class="fa fa-bold"></i>
+                    </button>
+                    <button class="editor-toolbar-btn" title="斜体" data-command="italic">
+                        <i class="fa fa-italic"></i>
+                    </button>
+                    <button class="editor-toolbar-btn" title="下划线" data-command="underline">
+                        <i class="fa fa-underline"></i>
+                    </button>
+                    
+                    <div class="h-8 border-r border-gray-300 dark:border-gray-600 mx-1"></div>
+                    
+                    <!-- 文本对齐 -->
+                    <button class="editor-toolbar-btn" title="左对齐" data-command="justifyLeft">
+                        <i class="fa fa-align-left"></i>
+                    </button>
+                    <button class="editor-toolbar-btn" title="居中对齐" data-command="justifyCenter">
+                        <i class="fa fa-align-center"></i>
+                    </button>
+                    <button class="editor-toolbar-btn" title="右对齐" data-command="justifyRight">
+                        <i class="fa fa-align-right"></i>
+                    </button>
+                    
+                    <div class="h-8 border-r border-gray-300 dark:border-gray-600 mx-1"></div>
+                    
+                    <!-- 列表 -->
+                    <button class="editor-toolbar-btn" title="无序列表" data-command="insertUnorderedList">
+                        <i class="fa fa-list-ul"></i>
+                    </button>
+                    <button class="editor-toolbar-btn" title="有序列表" data-command="insertOrderedList">
+                        <i class="fa fa-list-ol"></i>
+                    </button>
+                    <button class="editor-toolbar-btn" title="减少缩进" data-command="outdent">
+                        <i class="fa fa-outdent"></i>
+                    </button>
+                    <button class="editor-toolbar-btn" title="增加缩进" data-command="indent">
+                        <i class="fa fa-indent"></i>
+                    </button>
+                    
+                    <div class="h-8 border-r border-gray-300 dark:border-gray-600 mx-1"></div>
+                    
+                    <!-- 文本颜色 -->
+                    <div class="relative" id="foreColorContainer">
+                        <button id="foreColor" class="editor-toolbar-btn" title="文本颜色">
+                            <span class="color-indicator bg-black dark:bg-white"></span>
+                            <i class="fa fa-font"></i>
+                        </button>
+                        <div id="foreColorPalette" class="hidden absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 p-2 rounded shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                            <div class="grid grid-cols-8 gap-1">
+                                <!-- 颜色选项会通过JS动态生成 -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 背景颜色 -->
+                    <div class="relative" id="hiliteColorContainer">
+                        <button id="hiliteColor" class="editor-toolbar-btn" title="背景颜色">
+                            <span class="color-indicator bg-yellow-200 dark:bg-yellow-800"></span>
+                            <i class="fa fa-highlighter"></i>
+                        </button>
+                        <div id="hiliteColorPalette" class="hidden absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 p-2 rounded shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                            <div class="grid grid-cols-8 gap-1">
+                                <!-- 颜色选项会通过JS动态生成 -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="h-8 border-r border-gray-300 dark:border-gray-600 mx-1"></div>
+                    
+                    <!-- 插入功能 -->
+                    <button class="editor-toolbar-btn" title="插入链接" data-command="createLink">
+                        <i class="fa fa-link"></i>
+                    </button>
+                    <button class="editor-toolbar-btn" title="插入图片" data-command="insertImage">
+                        <i class="fa fa-image"></i>
+                    </button>
+                    <button class="editor-toolbar-btn" title="插入表格">
+                        <i class="fa fa-table"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 编辑器内容区 -->
+            <div class="flex-1 flex overflow-hidden">
+                <div id="editorContainer" class="flex-1 overflow-y-auto p-6 bg-white dark:bg-gray-800 m-4 rounded-lg shadow-sm transition-colors duration-300">
+                    <div id="editor" class="min-h-full" contenteditable="true">
+                        <h1 class="text-2xl font-bold mb-4">项目计划文档</h1>
+                        <p class="mb-4">本文档详细描述了项目的整体计划和时间安排，包括以下几个部分：</p>
+                        
+                        <h2 class="text-xl font-bold mt-6 mb-3">1. 项目背景</h2>
+                        <p class="mb-4">该项目旨在开发一个高效的知识库管理系统，帮助团队更好地管理和共享文档资源。</p>
+                        
+                        <h2 class="text-xl font-bold mt-6 mb-3">2. 项目目标</h2>
+                        <ul class="list-disc pl-6 mb-4">
+                            <li>建立结构化的文档管理系统</li>
+                            <li>支持Markdown格式编辑与预览</li>
+                            <li>实现文档的快速检索功能</li>
+                            <li>支持多人协作编辑</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- 附件上传区域 -->
+                    <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <button id="addAttachment" class="editor-toolbar-btn mb-3">
+                            <i class="fa fa-paperclip mr-2"></i>添加附件
+                        </button>
+                        <input type="file" id="attachmentInput" class="hidden" multiple>
+                        <div id="attachmentsContainer" class="space-y-2">
+                            <!-- 附件会在这里显示 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let folderIdCounter = 4;
+        let documentIdCounter = 1;
+        let linkIdCounter = 1;
+        let attachmentIdCounter = 1;
+        
+        // 1. 主题切换功能
+        const themeToggle = document.getElementById('themeToggle');
+        
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+        
+        themeToggle.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        });
+        
+        // 2. 工具栏切换
+        const toggleEditorToolbar = document.getElementById('toggleEditorToolbar');
+        const editorToolbar = document.getElementById('editorToolbar');
+        
+        toggleEditorToolbar.addEventListener('click', () => {
+            editorToolbar.classList.toggle('hidden');
+        });
+        
+        // 3. 左侧标签切换
+        const folderTab = document.getElementById('folderTab');
+        const linkTab = document.getElementById('linkTab');
+        const folderContent = document.getElementById('folderContent');
+        const linkContent = document.getElementById('linkContent');
+        
+        folderTab.addEventListener('click', () => {
+            folderTab.classList.add('text-primary', 'border-b-2', 'border-primary');
+            folderTab.classList.remove('text-gray-500', 'dark:text-gray-400');
+            linkTab.classList.remove('text-primary', 'border-b-2', 'border-primary');
+            linkTab.classList.add('text-gray-500', 'dark:text-gray-400');
+            folderContent.classList.remove('hidden');
+            linkContent.classList.add('hidden');
+        });
+        
+        linkTab.addEventListener('click', () => {
+            linkTab.classList.add('text-primary', 'border-b-2', 'border-primary');
+            linkTab.classList.remove('text-gray-500', 'dark:text-gray-400');
+            folderTab.classList.remove('text-primary', 'border-b-2', 'border-primary');
+            folderTab.classList.add('text-gray-500', 'dark:text-gray-400');
+            linkContent.classList.remove('hidden');
+            folderContent.classList.add('hidden');
+        });
+        
+        // 4. 文件夹展开/折叠功能
+        function setupFolderToggle() {
+            // 文件夹展开/折叠
+            document.querySelectorAll('.folder-item').forEach(folder => {
+                const folderHeader = folder.querySelector('.folder-tree-item');
+                const subItems = folder.querySelector('div.pl-6');
+                
+                // 确保每个文件夹都有点击事件
+                folderHeader.addEventListener('click', (e) => {
+                    if (!e.target.closest('.folder-actions')) {
+                        subItems.classList.toggle('hidden');
+                        const folderIcon = folderHeader.querySelector('.fa-folder, .fa-folder-open');
+                        if (folderIcon) {
+                            folderIcon.classList.toggle('fa-folder');
+                            folderIcon.classList.toggle('fa-folder-open');
+                        }
+                    }
+                });
+                
+                bindFolderActionButtons(folder);
+            });
+            
+            // 链接文件夹展开/折叠
+            document.querySelectorAll('.link-item').forEach(linkFolder => {
+                const folderHeader = linkFolder.querySelector('.folder-tree-item');
+                const subItems = linkFolder.querySelector('div.pl-6');
+                
+                folderHeader.addEventListener('click', (e) => {
+                    if (!e.target.closest('.link-actions')) {
+                        subItems.classList.toggle('hidden');
+                        const folderIcon = folderHeader.querySelector('.fa-folder, .fa-folder-open');
+                        if (folderIcon) {
+                            folderIcon.classList.toggle('fa-folder');
+                            folderIcon.classList.toggle('fa-folder-open');
+                        }
+                    }
+                });
+                
+                bindLinkActionButtons(linkFolder);
+            });
+        }
+        
+        // 5. 链接分区功能实现
+        document.getElementById('addLink').addEventListener('click', () => {
+            const linkName = prompt('请输入链接名称:', `新链接${linkIdCounter}`);
+            if (linkName) {
+                const linkUrl = prompt('请输入链接地址:');
+                if (linkUrl) {
+                    addNewLink(linkName, linkUrl, document.getElementById('linkTree'));
+                }
+            }
+        });
+        
+        function addNewLink(linkName, linkUrl, parentContainer) {
+            const linkItem = document.createElement('div');
+            linkItem.className = 'folder-tree-item flex items-center justify-between cursor-pointer';
+            linkItem.dataset.url = linkUrl;
+            
+            linkItem.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fa fa-external-link text-blue-500 mr-2"></i>
+                    <span class="link-name">${linkName}</span>
+                </div>
+                <div class="link-actions opacity-0 hover:opacity-100 transition-opacity">
+                    <button class="rename-link p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                        <i class="fa fa-pencil"></i>
+                    </button>
+                    <button class="insert-link p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                        <i class="fa fa-clipboard"></i>
+                    </button>
+                    <button class="delete-link p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            
+            parentContainer.appendChild(linkItem);
+            bindLinkItemActionButtons(linkItem);
+        }
+        
+        function bindLinkActionButtons(linkFolder) {
+            // 添加子链接
+            const addChildBtn = linkFolder.querySelector('.add-child-link');
+            if (addChildBtn) {
+                addChildBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const linkName = prompt('请输入链接名称:');
+                    if (linkName) {
+                        const linkUrl = prompt('请输入链接地址:');
+                        if (linkUrl) {
+                            const subLinkContainer = linkFolder.querySelector('div.pl-6');
+                            addNewLink(linkName, linkUrl, subLinkContainer);
+                            
+                            // 显示子链接容器
+                            subLinkContainer.classList.remove('hidden');
+                            const folderIcon = linkFolder.querySelector('.fa-folder');
+                            if (folderIcon) {
+                                folderIcon.classList.replace('fa-folder', 'fa-folder-open');
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // 重命名链接文件夹
+            const renameBtn = linkFolder.querySelector('.rename-link');
+            if (renameBtn) {
+                renameBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const linkFolderNameEl = linkFolder.querySelector('.link-folder-name');
+                    if (linkFolderNameEl) {
+                        const oldName = linkFolderNameEl.textContent;
+                        const newName = prompt('请输入新名称:', oldName);
+                        
+                        if (newName && newName !== oldName) {
+                            linkFolderNameEl.textContent = newName;
+                        }
+                    }
+                });
+            }
+            
+            // 删除链接文件夹
+            const deleteBtn = linkFolder.querySelector('.delete-link');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const linkFolderNameEl = linkFolder.querySelector('.link-folder-name');
+                    if (linkFolderNameEl && confirm(`确定要删除 "${linkFolderNameEl.textContent}" 吗？`)) {
+                        linkFolder.remove();
+                    }
+                });
+            }
+        }
+        
+        function bindLinkItemActionButtons(linkItem) {
+            // 重命名链接
+            const renameBtn = linkItem.querySelector('.rename-link');
+            if (renameBtn) {
+                renameBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const linkNameEl = linkItem.querySelector('.link-name');
+                    const oldName = linkNameEl.textContent;
+                    const newName = prompt('请输入新名称:', oldName);
+                    
+                    if (newName && newName !== oldName) {
+                        linkNameEl.textContent = newName;
+                    }
+                });
+            }
+            
+            // 插入链接到编辑器
+            const insertBtn = linkItem.querySelector('.insert-link');
+            if (insertBtn) {
+                insertBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const linkName = linkItem.querySelector('.link-name').textContent;
+                    const linkUrl = linkItem.dataset.url;
+                    
+                    // 在编辑器中插入链接
+                    document.execCommand('insertHTML', false, `<a href="${linkUrl}" target="_blank">${linkName}</a>`);
+                });
+            }
+            
+            // 删除链接
+            const deleteBtn = linkItem.querySelector('.delete-link');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const linkName = linkItem.querySelector('.link-name').textContent;
+                    
+                    if (confirm(`确定要删除链接 "${linkName}" 吗？`)) {
+                        linkItem.remove();
+                    }
+                });
+            }
+            
+            // 点击链接打开
+            linkItem.addEventListener('click', (e) => {
+                if (!e.target.closest('.link-actions')) {
+                    const linkUrl = linkItem.dataset.url;
+                    window.open(linkUrl, '_blank');
+                }
+            });
+        }
+        
+        // 6. 字体和字号功能实现
+        document.getElementById('fontFamily').addEventListener('change', function() {
+            document.execCommand('fontName', false, this.value);
+        });
+        
+        document.getElementById('fontSize').addEventListener('change', function() {
+            // 对选中内容应用字号
+            const selection = window.getSelection();
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const span = document.createElement('span');
+                span.style.fontSize = this.value;
+                range.surroundContents(span);
+            } else {
+                // 如果没有选中文本，设置光标处的格式
+                document.execCommand('styleWithCSS', false, true);
+                document.execCommand('fontSize', false, '7'); // 使用execCommand的特殊值
+                document.execCommand('styleWithCSS', false, false);
+                
+                // 修正字体大小
+                const elements = document.querySelectorAll('font[size="7"]');
+                elements.forEach(el => {
+                    el.style.fontSize = this.value;
+                    el.removeAttribute('size');
+                });
+            }
+        });
+        
+        // 7. 颜色应用功能
+        const colors = [
+            '#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#FFFFFF',
+            '#FF0000', '#FF9900', '#FFFF00', '#00FF00', '#00FFFF', '#0000FF',
+            '#9900FF', '#FF00FF', '#FF6666', '#FFCC99'
+        ];
+        
+        const foreColorPalette = document.getElementById('foreColorPalette').querySelector('div');
+        const hiliteColorPalette = document.getElementById('hiliteColorPalette').querySelector('div');
+        const editor = document.getElementById('editor');
+        const foreColorBtn = document.getElementById('foreColor');
+        const hiliteColorBtn = document.getElementById('hiliteColor');
+        
+        // 生成颜色选择面板
+        function generateColorPalettes() {
+            foreColorPalette.innerHTML = '';
+            hiliteColorPalette.innerHTML = '';
+            
+            colors.forEach(color => {
+                // 文本颜色选项
+                const foreColorBtn = document.createElement('button');
+                foreColorBtn.className = 'color-btn';
+                foreColorBtn.style.backgroundColor = color;
+                foreColorBtn.dataset.color = color;
+                foreColorBtn.addEventListener('click', () => {
+                    applyForeColor(color);
+                });
+                foreColorPalette.appendChild(foreColorBtn);
+                
+                // 背景颜色选项
+                const hiliteColorBtn = document.createElement('button');
+                hiliteColorBtn.className = 'color-btn';
+                hiliteColorBtn.style.backgroundColor = color;
+                hiliteColorBtn.dataset.color = color;
+                hiliteColorBtn.addEventListener('click', () => {
+                    applyHiliteColor(color);
+                });
+                hiliteColorPalette.appendChild(hiliteColorBtn);
+            });
+        }
+        
+        // 应用文本颜色
+        function applyForeColor(color) {
+            document.execCommand('foreColor', false, color);
+            foreColorBtn.querySelector('.color-indicator').style.backgroundColor = color;
+            document.getElementById('foreColorPalette').classList.add('hidden');
+        }
+        
+        // 应用背景颜色
+        function applyHiliteColor(color) {
+            document.execCommand('hiliteColor', false, color);
+            hiliteColorBtn.querySelector('.color-indicator').style.backgroundColor = color;
+            document.getElementById('hiliteColorPalette').classList.add('hidden');
+        }
+        
+        // 颜色选择器交互
+        foreColorBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('foreColorPalette').classList.toggle('hidden');
+            document.getElementById('hiliteColorPalette').classList.add('hidden');
+        });
+        
+        hiliteColorBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            document.getElementById('hiliteColorPalette').classList.toggle('hidden');
+            document.getElementById('foreColorPalette').classList.add('hidden');
+        });
+        
+        document.addEventListener('click', () => {
+            document.getElementById('foreColorPalette').classList.add('hidden');
+            document.getElementById('hiliteColorPalette').classList.add('hidden');
+        });
+        
+        // 8. 工具栏按钮功能
+        document.querySelectorAll('.editor-toolbar-btn[data-command]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const command = btn.getAttribute('data-command');
+                
+                if (command === 'createLink') {
+                    const url = prompt('请输入链接地址:');
+                    if (url) document.execCommand(command, false, url);
+                } else if (command === 'insertImage') {
+                    const url = prompt('请输入图片地址:');
+                    if (url) document.execCommand(command, false, url);
+                } else {
+                    document.execCommand(command, false, null);
+                }
+                
+                document.querySelectorAll('.editor-toolbar-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+        
+        // 9. 附件上传和删除功能
+        const addAttachmentBtn = document.getElementById('addAttachment');
+        const attachmentInput = document.getElementById('attachmentInput');
+        const attachmentsContainer = document.getElementById('attachmentsContainer');
+        
+        addAttachmentBtn.addEventListener('click', () => {
+            attachmentInput.click();
+        });
+        
+        attachmentInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+                for (let i = 0; i < files.length; i++) {
+                    addAttachment(files[i]);
+                }
+                // 重置input以允许重复选择同一文件
+                attachmentInput.value = '';
+            }
+        });
+        
+        function addAttachment(file) {
+            // 格式化文件大小
+            const fileSize = file.size < 1024 * 1024 
+                ? (file.size / 1024).toFixed(1) + ' KB'
+                : (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+            
+            // 确定文件图标
+            let fileIcon = 'fa-file-o';
+            if (file.type.startsWith('image/')) fileIcon = 'fa-file-image-o';
+            else if (file.type.startsWith('video/')) fileIcon = 'fa-file-video-o';
+            else if (file.type.startsWith('audio/')) fileIcon = 'fa-file-audio-o';
+            else if (file.type.includes('pdf')) fileIcon = 'fa-file-pdf-o';
+            else if (file.type.includes('word')) fileIcon = 'fa-file-word-o';
+            else if (file.type.includes('excel')) fileIcon = 'fa-file-excel-o';
+            else if (file.type.includes('powerpoint')) fileIcon = 'fa-file-powerpoint-o';
+            else if (file.type.includes('zip') || file.type.includes('rar')) fileIcon = 'fa-file-archive-o';
+            
+            const attachmentId = `attachment-${attachmentIdCounter++}`;
+            const attachmentEl = document.createElement('div');
+            attachmentEl.className = 'file-attachment';
+            attachmentEl.id = attachmentId;
+            attachmentEl.innerHTML = `
+                <div class="file-icon">
+                    <i class="fa ${fileIcon} text-xl"></i>
+                </div>
+                <div class="file-info">
+                    <div class="file-name">${file.name}</div>
+                    <div class="file-size">${fileSize}</div>
+                </div>
+                <button class="delete-attachment text-gray-500 dark:text-gray-400 hover:text-red-500 p-2">
+                    <i class="fa fa-times"></i>
+                </button>
+            `;
+            
+            attachmentsContainer.appendChild(attachmentEl);
+            
+            // 添加删除事件
+            attachmentEl.querySelector('.delete-attachment').addEventListener('click', () => {
+                if (confirm(`确定要删除附件 "${file.name}" 吗？`)) {
+                    attachmentEl.remove();
+                }
+            });
+        }
+        
+        // 10. 文件操作功能
+        // 10.1 添加新文档
+        document.getElementById('addDocument').addEventListener('click', () => {
+            const docName = prompt('请输入新文档名称:', `新文档${documentIdCounter}.md`);
+            if (docName) {
+                documentIdCounter++;
+                
+                const docItem = document.createElement('div');
+                docItem.className = 'folder-tree-item flex items-center justify-between';
+                docItem.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="fa fa-file-text-o text-gray-400 mr-2"></i>
+                        <span class="document-name">${docName}</span>
+                    </div>
+                    <div class="document-actions opacity-0 hover:opacity-100 transition-opacity">
+                        <button class="rename-document p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                            <i class="fa fa-pencil"></i>
+                        </button>
+                        <button class="move-document p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                            <i class="fa fa-arrows"></i>
+                        </button>
+                        <button class="delete-document p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+                
+                const firstFolder = document.querySelector('.folder-item div.pl-6');
+                if (firstFolder) {
+                    firstFolder.appendChild(docItem);
+                    bindDocumentActionButtons(docItem);
+                    
+                    firstFolder.classList.remove('hidden');
+                    const folderIcon = firstFolder.closest('.folder-item').querySelector('.fa-folder');
+                    if (folderIcon) {
+                        folderIcon.classList.replace('fa-folder', 'fa-folder-open');
+                    }
+                }
+            }
+        });
+        
+        // 10.2 添加根文件夹
+        document.getElementById('addRootFolder').addEventListener('click', () => {
+            const folderName = prompt('请输入文件夹名称:', `新文件夹${folderIdCounter}`);
+            if (folderName) {
+                addNewFolder(folderName, document.getElementById('folderTree'));
+            }
+        });
+        
+        // 10.3 文件夹操作
+        function bindFolderActionButtons(folderItem) {
+            // 添加子文件夹
+            const addChildBtn = folderItem.querySelector('.add-child-folder');
+            if (addChildBtn) {
+                addChildBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const folderName = prompt('请输入子文件夹名称:');
+                    if (folderName) {
+                        const subFolderContainer = folderItem.querySelector('div.pl-6');
+                        addNewFolder(folderName, subFolderContainer);
+                        
+                        subFolderContainer.classList.remove('hidden');
+                        const folderIcon = folderItem.querySelector('.fa-folder');
+                        if (folderIcon) {
+                            folderIcon.classList.replace('fa-folder', 'fa-folder-open');
+                        }
+                    }
+                });
+            }
+            
+            // 重命名文件夹
+            const renameBtn = folderItem.querySelector('.rename-folder');
+            if (renameBtn) {
+                renameBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const folderNameEl = folderItem.querySelector('.folder-name');
+                    const oldName = folderNameEl.textContent;
+                    const newName = prompt('请输入新文件夹名:', oldName);
+                    
+                    if (newName && newName !== oldName) {
+                        folderNameEl.textContent = newName;
+                    }
+                });
+            }
+            
+            // 删除文件夹
+            const deleteBtn = folderItem.querySelector('.delete-folder');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const folderName = folderItem.querySelector('.folder-name').textContent;
+                    
+                    if (confirm(`确定要删除文件夹 "${folderName}" 及其所有内容吗？`)) {
+                        folderItem.remove();
+                    }
+                });
+            }
+        }
+        
+        // 10.4 文档操作
+        function bindDocumentActionButtons(docItem) {
+            // 重命名文档
+            const renameBtn = docItem.querySelector('.rename-document');
+            if (renameBtn) {
+                renameBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const docNameEl = docItem.querySelector('.document-name');
+                    const oldName = docNameEl.textContent;
+                    const newName = prompt('请输入新文件名:', oldName);
+                    
+                    if (newName && newName !== oldName) {
+                        docNameEl.textContent = newName;
+                        if (document.getElementById('currentFileName').textContent === oldName) {
+                            document.getElementById('currentFileName').textContent = newName;
+                        }
+                    }
+                });
+            }
+            
+            // 删除文档
+            const deleteBtn = docItem.querySelector('.delete-document');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const docName = docItem.querySelector('.document-name').textContent;
+                    
+                    if (confirm(`确定要删除 "${docName}" 吗？`)) {
+                        docItem.remove();
+                        if (document.getElementById('currentFileName').textContent === docName) {
+                            editor.innerHTML = '';
+                            document.getElementById('currentFileName').textContent = '';
+                            attachmentsContainer.innerHTML = ''; // 清空附件
+                        }
+                    }
+                });
+            }
+            
+            // 移动文档
+            const moveBtn = docItem.querySelector('.move-document');
+            if (moveBtn) {
+                moveBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const docName = docItem.querySelector('.document-name').textContent;
+                    
+                    const folders = Array.from(document.querySelectorAll('.folder-item'))
+                        .map(folder => {
+                            const name = folder.querySelector('.folder-name').textContent;
+                            return { element: folder, id: folder.id, name };
+                        });
+                    
+                    if (folders.length > 0) {
+                        const folderNames = folders.map(f => f.name);
+                        const selectedFolder = prompt(`请选择目标文件夹:\n${folderNames.join('\n')}`);
+                        
+                        if (selectedFolder) {
+                            const targetFolder = folders.find(f => f.name === selectedFolder);
+                            if (targetFolder) {
+                                const target = targetFolder.element.querySelector('div.pl-6');
+                                if (target) {
+                                    const clonedDocItem = docItem.cloneNode(true);
+                                    bindDocumentActionButtons(clonedDocItem);
+                                    target.appendChild(clonedDocItem);
+                                    docItem.remove();
+                                    alert(`已将 "${docName}" 移动到 "${selectedFolder}"`);
+                                    
+                                    target.classList.remove('hidden');
+                                    const folderIcon = targetFolder.element.querySelector('.fa-folder');
+                                    if (folderIcon) {
+                                        folderIcon.classList.replace('fa-folder', 'fa-folder-open');
+                                    }
+                                }
+                            } else {
+                                alert('未找到指定的文件夹');
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // 点击文档打开
+            docItem.addEventListener('click', (e) => {
+                if (!e.target.closest('.document-actions')) {
+                    const docName = docItem.querySelector('.document-name').textContent;
+                    document.getElementById('currentFileName').textContent = docName;
+                    
+                    if (docName === '项目计划.md') {
+                        editor.innerHTML = `
+                            <h1 class="text-2xl font-bold mb-4">项目计划文档</h1>
+                            <p class="mb-4">本文档详细描述了项目的整体计划和时间安排。</p>
+                            <h2 class="text-xl font-bold mt-6 mb-3">1. 项目背景</h2>
+                            <p class="mb-4">开发高效的知识库管理系统，帮助团队管理和共享文档资源。</p>
+                        `;
+                    } else {
+                        editor.innerHTML = `<p>请编辑 ${docName} 的内容...</p>`;
+                    }
+                    
+                    // 清空当前附件
+                    attachmentsContainer.innerHTML = '';
+                    
+                    document.querySelectorAll('.folder-tree-item').forEach(item => {
+                        item.classList.remove('active');
+                    });
+                    docItem.classList.add('active');
+                }
+            });
+        }
+        
+        // 创建新文件夹
+        function addNewFolder(folderName, parentContainer) {
+            const folderItem = document.createElement('div');
+            folderItem.className = 'folder-item';
+            folderItem.id = `folder-${folderIdCounter}`;
+            folderIdCounter++;
+            
+            folderItem.innerHTML = `
+                <div class="folder-tree-item flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="fa fa-folder text-yellow-500 mr-2"></i>
+                        <span class="folder-name">${folderName}</span>
+                    </div>
+                    <div class="folder-actions opacity-0 hover:opacity-100 transition-opacity">
+                        <button class="add-child-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                            <i class="fa fa-plus-circle"></i>
+                        </button>
+                        <button class="rename-folder p-1 text-gray-500 dark:text-gray-400 hover:text-primary">
+                            <i class="fa fa-pencil"></i>
+                        </button>
+                        <button class="delete-folder p-1 text-gray-500 dark:text-gray-400 hover:text-red-500">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="pl-6 mt-1 space-y-1 hidden">
+                    <!-- 子文件将在这里显示 -->
+                </div>
+            `;
+            
+            parentContainer.appendChild(folderItem);
+            setupFolderToggle();
+        }
+        
+        // 初始化
+        function init() {
+            generateColorPalettes();
+            setupFolderToggle();
+            
+            // 绑定所有文档操作按钮
+            document.querySelectorAll('.folder-tree-item').forEach(item => {
+                if (item.querySelector('.document-name')) {
+                    bindDocumentActionButtons(item);
+                }
+            });
+            
+            // 绑定所有链接项操作按钮
+            document.querySelectorAll('.link-item .folder-tree-item').forEach(item => {
+                if (item.querySelector('.link-name') && !item.querySelector('.link-folder-name')) {
+                    bindLinkItemActionButtons(item);
+                }
+            });
+        }
+        
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
